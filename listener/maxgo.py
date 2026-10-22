@@ -46,7 +46,9 @@ class MaxGoClient:
             cached = self.store.get_json(self.token_cache_key)
             if cached:
                 self.token = cached
+                logger.info("Sessão MaxGo reutilizada do cache")
                 return
+        logger.info("Iniciando login MaxGo")
         self.jar.clear()
         self.token = None
         web = self.settings.web_url
@@ -77,6 +79,7 @@ class MaxGoClient:
         )
         if not self.token:
             raise ValueError("O login não forneceu LGSESSIONID.")
+        logger.info("Login MaxGo concluído")
         self.store.set_json(self.token_cache_key, self.token, TOKEN_TTL_SECONDS)
 
     def get(self, path, retry=True):
@@ -86,6 +89,7 @@ class MaxGoClient:
             if not retry:
                 raise ValueError("Sessão ausente ou expirada.")
             self.login()
+        logger.info("Consultando MaxGo %s", path)
         request = urllib.request.Request(
             self.settings.api_url + path,
             headers={"LGSESSIONID": self.token, "Accept": "application/json"},

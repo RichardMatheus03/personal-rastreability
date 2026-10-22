@@ -58,8 +58,11 @@ def run_listener(stop_event, settings, *, store=None, open_session=None, fetch_t
     while not stop_event.is_set():
         started = time.monotonic()
         try:
+            logger.info("Checando Redis")
             store.ping()
+            logger.info("Obtendo stompToken")
             token = fetch_token()
+            logger.info("Abrindo sessão STOMP")
             open_session(token)
         except ListenerStopped:
             break
@@ -73,7 +76,12 @@ def run_listener(stop_event, settings, *, store=None, open_session=None, fetch_t
             redis.exceptions.TimeoutError,
             websocket.WebSocketException,
         ) as error:
-            logger.warning("Conexão MaxGo interrompida (%s)", type(error).__name__)
+            logger.warning(
+                "Conexão MaxGo interrompida (%s): %s",
+                type(error).__name__,
+                error,
+                exc_info=True,
+            )
         if stop_event.is_set():
             break
         if time.monotonic() - started >= MAX_RECONNECT_DELAY_SECONDS:

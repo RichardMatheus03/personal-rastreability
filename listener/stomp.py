@@ -49,6 +49,7 @@ def receive_frame(connection, pending, stop_event, deadline=None):
                 line.rstrip("\r").split(":", 1) for line in lines[1:] if ":" in line
             )
             if command == "ERROR":
+                logger.warning("Frame STOMP ERROR: %s", body[:300].rstrip("\x00"))
                 raise ValueError("A MaxGo enviou um frame STOMP ERROR")
             if command == "MESSAGE":
                 logger.info(
@@ -77,8 +78,10 @@ def receive_frame(connection, pending, stop_event, deadline=None):
         if message == "h":
             continue
         if message.startswith("c"):
+            logger.warning("SockJS encerrou a sessão: %r", message[:120])
             raise ConnectionError("A MaxGo fechou a sessão SockJS")
         if not message.startswith("a"):
+            logger.warning("Mensagem SockJS inesperada: %r", message[:120])
             raise ValueError("Mensagem SockJS inesperada")
         frames = json.loads(message[1:])
         if not isinstance(frames, list) or not all(
@@ -143,13 +146,19 @@ def consume_session(
     session = secrets.token_hex(4)
     url = f"{stomp_url}/{server}/{session}/websocket"
     connect = connect or websocket.create_connection
+    logger.info("Abrindo SockJS")
     with closing(
         connect(url, origin=web_url, timeout=SOCKET_TIMEOUT_SECONDS)
     ) as connection:
-        if connection.recv() != "o":
+        opened = connection.recv()
+        if opened != "o":
+            preview = opened[:120] if isinstance(opened, str) else opened
+            logger.warning("SockJS não abriu a sessão: %r", preview)
             raise ValueError("A MaxGo não abriu a sessão SockJS")
+        logger.info("Sessão SockJS aberta")
 
         pending = deque()
+        logger.info("Enviando CONNECT")
         send_frame(
             connection,
             f"CONNECT\ntoken:{token}\naccept-version:1.1,1.0\n"
@@ -159,8 +168,11 @@ def consume_session(
             connection, pending, stop_event, time.monotonic() + SOCKET_TIMEOUT_SECONDS
         )
         if command != "CONNECTED":
+            logger.warning("Frame STOMP inesperado durante CONNECT: %s", command)
             raise ValueError("A MaxGo não confirmou CONNECTED")
+        logger.info("STOMP CONNECTED")
 
+        logger.info("Inscrevendo nas filas MaxGo")
         for index, destination in enumerate(
             (POSITION_DESTINATION, DEFINED_DESTINATION, MONITORING_DESTINATION)
         ):
@@ -173,8 +185,10 @@ def consume_session(
             f"SEND\ndestination:/app/defineMonitoramento\n\n{token}:mapaReact\x00",
         )
         next_message(connection, pending, stop_event, DEFINED_DESTINATION, save)
+        logger.info("Monitoramento definido")
 
         body = json.dumps({"veiculoId": vehicle_id}, separators=(",", ":"))
+        logger.info("Solicitando monitoramento do veículo %s", vehicle_id)
         send_frame(connection, f"SEND\ndestination:/app/monitoramento\n\n{body}\x00")
         monitored = json.loads(
             next_message(
@@ -184,6 +198,12 @@ def consume_session(
         if not isinstance(monitored, list) or str(vehicle_id) not in {
             str(item) for item in monitored
         }:
+            logger.warning(
+                "Veículo %s ausente na confirmação (tipo=%s, itens=%s)",
+                vehicle_id,
+                type(monitored).__name__,
+                len(monitored) if isinstance(monitored, list) else "n/a",
+            )
             raise ValueError("A MaxGo não confirmou o veículo monitorado")
         logger.info("Monitoramento STOMP ativo para veículo %s", vehicle_id)
 
