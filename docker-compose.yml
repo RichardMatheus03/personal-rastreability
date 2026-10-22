@@ -1,0 +1,15 @@
+services:
+  maxgo-listener:
+    build: .
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: .env
+    environment:
+      TZ: ${TZ:-America/Bahia}
+    networks:
+      - sigti
+
+networks:
+  sigti:
+    name: ${SIGTI_DOCKER_NETWORK:?defina SIGTI_DOCKER_NETWORK no .env}
+    external: true
