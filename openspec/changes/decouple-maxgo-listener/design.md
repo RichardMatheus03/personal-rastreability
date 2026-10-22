@@ -34,14 +34,14 @@ Este repositório ainda não tem aplicação. A change cria o processo, o compos
 
 ### Processo Python próprio, não a imagem do sigti
 
-O listener passa a ser um pacote Python 3.15 executado como entrypoint do container. A imagem base é `python:3.15-slim`. O sigti-backend continua em 3.12; este repositório não herda essa versão. Dependências de runtime: `redis`, `websocket-client` e `shapely`. HTTP de login e o POST da Evolution ficam na biblioteca padrão.
+O listener passa a ser um pacote Python 3.14 executado como entrypoint do container. A imagem base é `python:3.14-slim`. O Shapely 2.1.2 publica wheel para essa versão, então a imagem slim instala o pacote sem compilador. Dependências de runtime: `redis`, `websocket-client` e `shapely`. HTTP de login e o POST da Evolution ficam na biblioteca padrão.
 
 Alternativa considerada: apontar o compose daqui para a imagem do sigti. Isso continuaria dependente do Django, do Celery e do settings daquele repositório. O processo é escrito de novo neste repositório, com o código de lá só como leitura.
 
 Layout alvo:
 
 - `listener/` — configuração, cliente MaxGo, `WhatsappEvolutionClient`, `process_come_home`, `alert_movement`, sessão STOMP, histórico e cerca
-- `Dockerfile` — `python:3.15-slim`, `tzdata`, `TZ=America/Bahia`
+- `Dockerfile` — `python:3.14-slim`, `tzdata`, `TZ=America/Bahia`
 - `requirements.txt` — runtime; `pytest` só em dev
 - `tests/` — os contratos de histórico, STOMP, cerca e avisos, com Redis e HTTP falsos
 
@@ -115,7 +115,7 @@ O histórico é leitura-modificação-gravação, como o `cache.get`/`cache.set`
 
 ## Migration Plan
 
-Não há migração nem operação. A change entrega a réplica no personal-rastreability: processo, testes, `Dockerfile`, `docker-compose.yml` e `.env.example`, com as diferenças já descritas (Python 3.15, funções locais, `WhatsappEvolutionClient`, `EMERGENCY_CONTACT`, chaves JSON). Não há `docker compose up`, `docker compose stop`, rollback nem passo no `sigti-backend`.
+Não há migração nem operação. A change entrega a réplica no personal-rastreability: processo, testes, `Dockerfile`, `docker-compose.yml` e `.env.example`, com as diferenças já descritas (Python 3.14, funções locais, `WhatsappEvolutionClient`, `EMERGENCY_CONTACT`, chaves JSON). Não há `docker compose up`, `docker compose stop`, rollback nem passo no `sigti-backend`.
 
 ## Open Questions
 

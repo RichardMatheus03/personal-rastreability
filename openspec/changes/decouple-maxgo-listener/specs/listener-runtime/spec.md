@@ -19,14 +19,14 @@ This change MUST be implemented only inside personal-rastreability. It MUST NOT 
 - **WHEN** the change is complete
 - **THEN** the listener exists as code and Compose in personal-rastreability and no `docker compose up` or `docker compose stop` was run
 
-### Requirement: Listener image uses Python 3.15
+### Requirement: Listener image uses Python 3.14
 
-The listener image MUST be built from `python:3.15-slim`. The process inside the container MUST run on Python 3.15.
+The listener image MUST be built from `python:3.14-slim`. The process inside the container MUST run on Python 3.14.
 
 #### Scenario: Image interpreter
 
 - **WHEN** the listener image is built
-- **THEN** `python --version` inside the image reports Python 3.15
+- **THEN** `python --version` inside the image reports Python 3.14
 
 ### Requirement: Compose runs only the listener
 

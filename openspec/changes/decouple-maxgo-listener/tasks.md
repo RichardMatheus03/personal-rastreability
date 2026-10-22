@@ -30,7 +30,7 @@
 ## 5. Compose e ambiente
 
 - [x] 5.1 Manter toda a implementação dentro de personal-rastreability, sem criar, editar ou apagar arquivo no `sigti-backend`, e sem executar `docker compose up` ou `docker compose stop`
-- [x] 5.2 Criar o `Dockerfile` em `python:3.15-slim` com `tzdata` e entrypoint do processo listener
+- [x] 5.2 Criar o `Dockerfile` em `python:3.14-slim` com `tzdata` e entrypoint do processo listener
 - [x] 5.3 Criar `docker-compose.yml` com o único serviço `maxgo-listener` (`restart: unless-stopped`, `stop_grace_period: 30s`, `env_file: .env`, `TZ` padrão `America/Bahia`, sem porta publicada) na rede externa cujo nome é só `${SIGTI_DOCKER_NETWORK}` vindo do `.env`
 - [x] 5.4 Criar `.env.example` só neste repositório, com todas as variáveis que o processo e o Compose leem: nomes e endereços lidos do sigti (`REDIS_URL=redis://redis:6379/1`, `EVOLUTION_SERVER_URL=http://evolution-api:8080`, `MAXGO_STOMP_URL` padrão, credenciais vazias), `EMERGENCY_CONTACT=` com comentário de que recebe `process_come_home` e `alert_movement`, `SIGTI_DOCKER_NETWORK=` vazio com comentário de `{COMPOSE_PROJECT_NAME}_default` e os nomes `touros-educacao-backend_default` e `touros-transporte-backend_default`, e o comentário de que o `sigti-backend` é referência somente leitura e não é alterado
 - [x] 5.5 Ligar o módulo executável para carregar a configuração, tratar sinais e chamar o loop
