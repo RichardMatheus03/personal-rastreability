@@ -1,12 +1,16 @@
 """Sessão STOMP, token em cache e reconexão."""
 
+import http.cookiejar
 import json
 import signal
+import urllib.request
 from threading import Event
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from listener.config import load_settings
-from listener.maxgo import MaxGoClient
+from listener.maxgo import InsecureRedirect, MaxGoClient, SameHostRedirect
 from listener.runner import install_signals, run_listener
 from listener.stomp import consume_session
 from tests.memory import MemoryStore
@@ -50,6 +54,123 @@ def test_cached_session_skips_login_form():
     assert client.stomp_token() == "stomp-1"
     assert all(data is None or b"username=" not in data for data, _url in requests)
     assert any(str(url).endswith("/front/getProps") for _data, url in requests)
+
+
+def session_cookie(value):
+    return http.cookiejar.Cookie(
+        0,
+        "LGSESSIONID",
+        value,
+        None,
+        False,
+        "maxgo.example.test",
+        True,
+        False,
+        "/",
+        True,
+        True,
+        None,
+        False,
+        None,
+        None,
+        {},
+    )
+
+
+class Page:
+    def __init__(self, url):
+        self.url = url
+
+    def read(self):
+        return b""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+def as_request(request):
+    if isinstance(request, str):
+        return urllib.request.Request(request)
+    return request
+
+
+def test_login_posts_form_action_and_stops_before_http_redirect():
+    store = MemoryStore()
+    settings = load_settings(valid_env())
+    client = MaxGoClient(settings, store, opener=object())
+    seen = []
+
+    class Opener:
+        def open(self, request, timeout=None):
+            request = as_request(request)
+            seen.append((request.data, request.full_url))
+            if request.full_url.endswith("/login/login"):
+                return Page(request.full_url)
+            if request.full_url.endswith("/login"):
+                client.jar.set_cookie(session_cookie("sess-1"))
+                raise InsecureRedirect("http://maxgo.example.test/inicio/index")
+            raise AssertionError(request.full_url)
+
+    client.web = Opener()
+    client.login()
+    assert client.token == "sess-1"
+    assert store.get_json(client.token_cache_key) == "sess-1"
+    posts = [(data, url) for data, url in seen if data]
+    assert posts == [
+        (
+            b"username=user&password=secret",
+            "https://maxgo.example.test/login",
+        )
+    ]
+
+
+def test_login_form_still_visible_rejects_credentials():
+    store = MemoryStore()
+    settings = load_settings(valid_env())
+    client = MaxGoClient(settings, store, opener=object())
+
+    class Opener:
+        def open(self, request, timeout=None):
+            request = as_request(request)
+            if request.data:
+                return Page(settings.web_url + "/login/login")
+            return Page(request.full_url)
+
+    client.web = Opener()
+    with pytest.raises(ValueError, match="Login não concluído"):
+        client.login()
+    assert client.token is None
+
+
+def test_https_redirect_on_the_same_host_is_followed():
+    handler = SameHostRedirect()
+    request = urllib.request.Request("https://maxgo.example.test/login")
+    redirected = handler.redirect_request(
+        request, None, 302, "Found", {}, "https://maxgo.example.test/inicio/index"
+    )
+    assert redirected.full_url == "https://maxgo.example.test/inicio/index"
+
+
+def test_http_redirect_on_the_same_host_is_not_followed():
+    handler = SameHostRedirect()
+    request = urllib.request.Request("https://maxgo.example.test/login")
+    with pytest.raises(InsecureRedirect) as error:
+        handler.redirect_request(
+            request, None, 302, "Found", {}, "http://maxgo.example.test/inicio/index"
+        )
+    assert error.value.url == "http://maxgo.example.test/inicio/index"
+
+
+def test_redirect_to_another_host_is_rejected():
+    handler = SameHostRedirect()
+    request = urllib.request.Request("https://maxgo.example.test/login")
+    with pytest.raises(ValueError, match="Redirecionamento inesperado"):
+        handler.redirect_request(
+            request, None, 302, "Found", {}, "https://other.example.test/inicio"
+        )
 
 
 def test_vehicle_confirmed_accepts_later_position():

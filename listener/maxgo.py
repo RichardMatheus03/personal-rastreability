@@ -14,12 +14,23 @@ logger = logging.getLogger(__name__)
 TOKEN_TTL_SECONDS = 5 * 60 * 60
 
 
+class InsecureRedirect(ValueError):
+    """O login respondeu no mesmo host, mas em HTTP. O cookie já está no jar."""
+
+    def __init__(self, url):
+        super().__init__("Redirecionamento HTTP no mesmo host não será seguido")
+        self.url = url
+
+
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         old = urllib.parse.urlsplit(req.full_url)
         new = urllib.parse.urlsplit(newurl)
-        if new.scheme != "https" or new.hostname != old.hostname:
+        if new.hostname != old.hostname or new.scheme not in ("https", "http"):
             raise ValueError("Redirecionamento inesperado; operação interrompida.")
+        if new.scheme != "https":
+            # HTTPCookieProcessor já gravou o Set-Cookie deste 302.
+            raise InsecureRedirect(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -60,8 +71,9 @@ class MaxGoClient:
                 "password": self.settings.password,
             }
         ).encode()
+        logger.info("Enviando credenciais para /login")
         request = urllib.request.Request(
-            web + "/login/login",
+            web + "/login",
             data=data,
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -69,10 +81,15 @@ class MaxGoClient:
                 "Referer": web + "/login/login",
             },
         )
-        with self.web.open(request, timeout=30) as response:
-            response.read()
-            if "/login/" in urllib.parse.urlsplit(response.url).path:
-                raise ValueError("Login não concluído. Verifique as credenciais.")
+        try:
+            with self.web.open(request, timeout=30) as response:
+                response.read()
+                landed = urllib.parse.urlsplit(response.url).path
+        except InsecureRedirect as redirect:
+            logger.info("Login MaxGo não seguiu o redirecionamento HTTP")
+            landed = urllib.parse.urlsplit(redirect.url).path
+        if "/login/" in landed:
+            raise ValueError("Login não concluído. Verifique as credenciais.")
         self.token = next(
             (cookie.value for cookie in self.jar if cookie.name == "LGSESSIONID"),
             None,
